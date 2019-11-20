@@ -29,6 +29,8 @@ var visualAdDuration float64 = 10
 var audioAdPath string = "./media/yandex_eda_10sec.mp4"
 var audioAdDuration float64 = 10
 
+var silenceDuration float64 = 10
+
 func main() {
 	// Flags.
 	flag.Float64Var(&flagSegmentDuration, "d", 120, "Duration of the output segments in seconds, must be at least 11 seconds")
@@ -197,7 +199,7 @@ func makeAudioAdSegment(f *ffinfo.File) error {
 	}
 	rand.Seed(time.Now().UnixNano())
 	rand.Intn(max)
-	defectOffset := fmt.Sprintf("%v", math.Max(0, float64(rand.Intn(max-min)+min)))
+	defectOffset := math.Max(0, float64(rand.Intn(max-min)+min))
 
 	fmt.Printf("> Making audio ad segment for \"%v\"\n", filepath.Base(f.Format.Filename))
 	fmt.Printf("> segmentStart: %v; segmentDuration: %v; defectOffset: %v\n\n", segmentStart, flagSegmentDuration, defectOffset)
@@ -207,7 +209,7 @@ func makeAudioAdSegment(f *ffinfo.File) error {
 	var i int
 	for _, s := range f.Streams {
 		if s.CodecType == "audio" {
-			filterComplex += fmt.Sprintf("[0:%v]volume=0.25:enable='between(t,%v,%v)'[a%v],[1:a]volume=1.5[ad%v],[ad%v][a%v]amix=inputs=2:duration=longest:dropout_transition=2[a%v],", s.Index, defectOffset, audioAdDuration, s.Index, s.Index, s.Index, s.Index, s.Index)
+			filterComplex += fmt.Sprintf("[0:%v]volume=0.25:enable='between(t,%v,%v)'[a%v],[1:a]volume=1.5[ad%v],[ad%v][a%v]amix=inputs=2:duration=longest:dropout_transition=2[a%v],", s.Index, defectOffset, defectOffset+audioAdDuration, s.Index, s.Index, s.Index, s.Index, s.Index)
 
 			disposition := "none"
 			if s.Disposition.Default == 1 {
@@ -228,7 +230,7 @@ func makeAudioAdSegment(f *ffinfo.File) error {
 	command := []string{
 		"-ss", fmt.Sprintf("%v", segmentStart),
 		"-i", f.Format.Filename,
-		"-itsoffset", defectOffset,
+		"-itsoffset", fmt.Sprintf("%v", defectOffset),
 		"-i", audioAdPath,
 		"-filter_complex", filterComplex,
 		"-map", "0:v",
@@ -276,7 +278,7 @@ func makeSilenceSegment(f *ffinfo.File) error {
 	}
 	rand.Seed(time.Now().UnixNano())
 	rand.Intn(max)
-	defectOffset := fmt.Sprintf("%v", math.Max(0, float64(rand.Intn(max-min)+min)))
+	defectOffset := math.Max(0, float64(rand.Intn(max-min)+min))
 
 	fmt.Printf("> Making silence segment for \"%v\"\n", filepath.Base(f.Format.Filename))
 	fmt.Printf("> segmentStart: %v; segmentDuration: %v; defectOffset: %v\n\n", segmentStart, flagSegmentDuration, defectOffset)
@@ -293,7 +295,7 @@ func makeSilenceSegment(f *ffinfo.File) error {
 		"-map", "0:a",
 		"-ab", "256k",
 		"-ar", "48000",
-		"-af", fmt.Sprintf("volume=0:enable='between(t,%v,%v)'", defectOffset, 10),
+		"-af", fmt.Sprintf("volume=0:enable='between(t,%v,%v)'", defectOffset, defectOffset+silenceDuration),
 		"-t", fmt.Sprintf("%v", flagSegmentDuration),
 		"-loglevel", "error",
 		"-stats",
